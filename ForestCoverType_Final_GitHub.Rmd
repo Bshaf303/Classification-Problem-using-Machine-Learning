@@ -1,0 +1,963 @@
+---
+title: "Forest Cover Analysis"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## GitHub Documents
+
+## Forest Cover Type Classification Problem
+
+UCI Cover Type Dataset: https://archive.ics.uci.edu/ml/datasets/covertype
+UCI dataset link: https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/
+
+
+```{r 1. Load and Name Columns}
+#segData <- segData[, -(1:3)] remove columns
+library(tidyverse)
+ct <- read.csv("C:/Users/Zeus/Desktop/DS Practicum/Kaggle Project/covtype.data") #UCI raw data
+#Name UCI data Variables
+names(ct) <- c("Elevation", "Aspect", "Slope", "Horizontal_Distance_To_Hydrology", "Vertical_Distance_To_Hydrology",
+                        "Horizontal_Distance_To_Roadways", "Hillshade_9am", "Hillshade_Noon", "Hillshade_3pm", "Horizontal_Distance_To_Fire_Points",
+                        "Wilderness_Area1", "Wilderness_Area2", "Wilderness_Area3", "Wilderness_Area4", "Soil_Type1", "Soil_Type2","Soil_Type3","Soil_Type4",
+                        "Soil_Type5","Soil_Type6","Soil_Type7","Soil_Type8","Soil_Type9","Soil_Type10","Soil_Type11","Soil_Type12","Soil_Type13","Soil_Type14",
+                        "Soil_Type15","Soil_Type16","Soil_Type17","Soil_Type18","Soil_Type19","Soil_Type20","Soil_Type21","Soil_Type22","Soil_Type23","Soil_Type24",
+                        "Soil_Type25","Soil_Type26","Soil_Type27","Soil_Type28","Soil_Type29","Soil_Type30","Soil_Type31","Soil_Type32","Soil_Type33","Soil_Type34",
+                        "Soil_Type35","Soil_Type36","Soil_Type37","Soil_Type38","Soil_Type39","Soil_Type40", "Cover_Type")
+str(ct)
+```
+```{r 2. Dependent Variable Proportions}
+#Predictor Variable Dispersion in data set Table numbers and proportions
+cbind(table(ct$Cover_Type), round(prop.table(table(ct$Cover_Type)),3)*100)
+```
+```{r 3. Name Cover Types & Group Variables}
+ct$Cover_Type <- factor(ct$Cover_Type) #change to factor
+ct$Cover_Type <- fct_recode(ct$Cover_Type, #code numbers to descriptive names
+                                  "Spuce_Fir" = "1",
+                                  "Lodgepole" = "2",
+                                  "Ponderosa" = "3",
+                                  "CottonWd_Willow" = "4",
+                                  "Aspen" = "5",
+                                  "DougFir" = "6",
+                                  "Krummholz" ="7")
+#Group Regions for visual
+ct$region <- names(ct[11:14])[apply(ct[11:14], 1, match, x = 1)]
+ct$region <- factor(ct$region) 
+#Check Proportions
+cbind(table(ct$region), round(prop.table(table(ct$region)),3)*100)
+#Soil Type into one category
+ct$soil <- names(ct[15:54])[apply(ct[15:54], 1, match, x = 1)]
+ct$soil <- factor(ct$soil)
+#Check Proportions
+cbind(table(ct$soil), round(prop.table(table(ct$soil)),3)*100)
+```
+```{r 4. Group Variable Column}
+#Group Aspects into compass directions per standards
+ct <- within(ct,{
+  direction <- NA
+  direction[Aspect <= 22.5] <- "North"
+  direction[Aspect >= 22.6 & Aspect <= 67.5] <- "Northeast"
+  direction[Aspect >= 67.6 & Aspect <= 112.5] <- "East"
+  direction[Aspect >= 112.6 & Aspect <= 157.5] <- "Southeast" 
+  direction[Aspect >= 157.6 & Aspect <= 202.5] <- "South"
+  direction[Aspect >= 202.6 & Aspect <= 247.5] <- "Southwest"
+  direction[Aspect >= 247.6 & Aspect <= 292.5] <- "West"
+  direction[Aspect >= 292.6 & Aspect <= 337.5] <- "Northwest"
+  direction[Aspect >= 337.6 & Aspect <= 360] <- "North"
+})
+ct$direction <- factor(ct$direction)
+#Check Proportions
+cbind(table(ct$direction), round(prop.table(table(ct$direction)),3)*100)
+```
+```{r 5. Group Variable Column}
+#Group Elevations into Plant Growth Zones for ROcky Mountain Region in COlorado
+ct <- within(ct,{
+  zone <- NA
+  zone[Elevation >= 3353] <- "4_Alpine"
+  zone[Elevation >= 2743 & Elevation <= 3352] <- "3_Subalpine"
+  zone[Elevation >=2134 & Elevation <= 2742] <- "2_Montane"
+  zone[Elevation <= 2133] <- "1_Foothills" })
+ct$zone <- factor(ct$zone)
+#Check Proportions
+cbind(table(ct$zone), round(prop.table(table(ct$zone)),3)*100)
+```
+```{r 6. Make New Variable Distance}
+#prepare as numeric
+ct$Horizontal_Distance_To_Hydrology <- as.numeric(ct$Horizontal_Distance_To_Hydrology)
+ct$Vertical_Distance_To_Hydrology <- as.numeric(ct$Vertical_Distance_To_Hydrology)
+#Find Approx Surface Distance - Pythagorean Theorum
+ct$Dist_water <- sqrt(ct$Horizontal_Distance_To_Hydrology^2 + ct$Vertical_Distance_To_Hydrology^2)
+#Remove to not correlate
+ct$Horizontal_Distance_To_Hydrology <- NULL
+ct$Vertical_Distance_To_Hydrology <- NULL
+#Check min-max
+summary(ct$Dist_water)
+```
+```{r 7 Make Smaller Sample To Run Viz}
+#Make a random small data sample to visualize the UCI data, is too large
+library(caret)
+set.seed(1)
+smlSet <- createDataPartition(ct$Cover_Type, p=.02,
+                                  list = FALSE,
+                                  times = 1)
+smlSet <- ct[ smlSet,]
+#check proportions for dependent variable
+cbind(table(smlSet$Cover_Type), round(prop.table(table(smlSet$Cover_Type)),3)*100)
+```
+```{r fig.height=10, fig.width=10, fig.height=10}
+#Boxplots in color and outliers in black
+ggplot(smlSet, aes(Cover_Type, Elevation)) + 
+  geom_boxplot(aes(color = Cover_Type), outlier.color = "black") + ggtitle("Cover Type and Elevation")
+```
+
+
+
+```{r 8. Plot 1a Cover Type/Zone, fig.width=12}
+#BarPlot Cover Type to Zone(Elevation), note the growth zones of each tree
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =Cover_Type, fill=zone), position = 'fill') + ggtitle("Cover Type and Growth Zone")
+```
+```{r 9. Plot 2 Cover Type/Zone, fig.width=12}
+#plots CoverType to Elevation
+ggplot(smlSet, aes(Cover_Type, zone, color=Cover_Type)) + 
+  geom_point(pch=19, size=15)  + ggtitle("Cover Type and Growth Zone")
+```
+```{r 10. Plot 3 Cover Type/Wilderness Area, fig.width=12}
+#Look at the Region and Covertype
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =Cover_Type, fill=region), position = 'fill')  + ggtitle("Cover Type and Wilderness Area")
+```
+```{r 11. Plot 4 CoverType/Wilderness, fig.width=12}
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =Cover_Type, fill=region), position = 'dodge') + ggtitle("Cover Type and Wilderness Area")
+```
+```{r 12. Plot 5 Zone/Wilderness Area, fig.width=10}
+#Look at Region and Zone(Elevation)
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =region, fill=zone), position = 'fill') + ggtitle("Growth Zone and Wilderness Area")
+```
+```{r 13 Plot 6 Zone/Wilderness Area, fig.width=10}
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =region, fill=zone), position = 'dodge') + ggtitle("Growth Zone and Wilderness Area")
+```
+```{r 14 Plot 7 WildernessArea/Direction, fig.width=10}
+#Look at direction and CoverType
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =region, fill=direction), position = 'fill') + ggtitle("Wilderness Area and Facing Direction")
+```
+```{r 15 Plot 8 Wilderness/Direction, fig.width=10}
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =region, fill=direction), position = 'dodge') + ggtitle("Wilderness Area and Facing Direction")
+```
+```{r 16 Plot 9 Zone/Direction, fig.width=10}
+#Look at direction and zone
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =zone, fill=direction), position = 'fill') + ggtitle("Growth Zone and Facing Direction")
+```
+```{r 17 Plot 10 Zone/Direction, fig.width=10}
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =zone, fill=direction), position = 'dodge') + ggtitle("Growth Zone and Facing Direction")
+```
+```{r 18 Plot 11 Direction/CoverType, fig.width=10}
+#Slope to direction and Cover_Type
+ggplot(smlSet, mapping=aes(x=direction, y=Slope)) +
+  geom_point(mapping=aes(color= Cover_Type), pch=19, size=2) + ggtitle("Cover Type  and Facing Direction")
+```
+```{r 19 Plot 12 Slope/CoverType, fig.width=10}
+#######Slope and Cover_Type Note the four outliers at high slopes
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =Slope, fill=Cover_Type), position = 'fill') + ggtitle("Cover Type  and Slope of Terrain")
+```
+```{r 20 Plot 13 Slope/CoverType, fig.width=10}
+##### Slope, Elevation, CoverType, Smoothing Line
+ggplot(smlSet, aes(Slope, Elevation)) + 
+  geom_jitter(mapping= aes(color= Cover_Type), width = 1, height = 0.5, size=.5) +
+  geom_smooth(mapping = aes(Slope, Elevation, linetype = Cover_Type, color = Cover_Type), size=3) + ggtitle("Cover Type, Slope of Terrain, and Elevation")
+```
+```{r 21 Plot 14 Elevation/Aspect/CoverType, fig.width=10}
+##### Aspect, elevation, Cover_type
+ggplot(smlSet, aes(Aspect, Elevation)) + 
+  geom_jitter(mapping= aes(color= Cover_Type), width = 1, height = 0.5, size=.5) +
+  geom_smooth(mapping = aes(Aspect, Elevation, linetype = Cover_Type, color = Cover_Type), size=3) + ggtitle("Cover Type, Facing Direction (Aspect), and Elevation")
+```
+```{r 22 Plot 15 Elevation/Distance/CoverType, fig.width=10}
+####Distance to water, elevation, Cover_type
+ggplot(smlSet, aes(Dist_water, Elevation)) + 
+  geom_jitter(mapping= aes(color= Cover_Type), width = 1, height = 0.5, size=.5) +
+  geom_smooth(mapping = aes(Dist_water, Elevation, linetype = Cover_Type, color = Cover_Type), size=3) + ggtitle("Cover Type, Distance to Water, and Elevation")
+```
+```{r 23 Plot 16 Aspect/Distance/CoverType, fig.width=10}
+####Aspect, distance to water and CoverType
+ggplot(smlSet, aes(Dist_water, Aspect)) + 
+  geom_jitter(mapping= aes(color= Cover_Type), width = 1, height = 0.5, size=.5) +
+  geom_smooth(mapping = aes(Dist_water, Aspect, linetype = Cover_Type, color = Cover_Type), size=3) + ggtitle("Cover Type, Distance to Water, and Facing Direction (Aspect)")
+```
+```{r 24 Plot 17 Distance/Aspect/CoverType, fig.width=10}
+####Distance to water, aspect, Cover type
+ggplot(smlSet, aes(Aspect, Dist_water)) + 
+  geom_jitter(mapping= aes(color= Cover_Type), width = 1, height = 0.5, size=.5) +
+  geom_smooth(mapping = aes(Aspect, Dist_water, linetype = Cover_Type, color = Cover_Type), size=3) + ggtitle("Cover Type, Facing Direction (Aspect), and Distance to Water")
+```
+```{r 25 Plot 18, fig.width=10}
+####direction and covertype
+ggplot(smlSet, aes(Aspect, Cover_Type)) + 
+  geom_jitter(mapping= aes(color= Cover_Type), width = 1, height = 0.5, size=.5) +
+  geom_smooth(mapping = aes(Aspect, Cover_Type, linetype = Cover_Type, color = Cover_Type), size=3)  + ggtitle("Cover Type, Facing Direction (Aspect)")
+```
+```{r 26 Plot 19, fig.width=10}
+#direction and CoverType Polar coordinates
+bar <- ggplot(data=smlSet) +
+  geom_bar(mapping = aes(x =direction, fill = Cover_Type), position = 'fill')
+bar + coord_flip() + ggtitle("Cover Type and Facing Direction")
+```
+```{r 27 Plot 20, fig.height=10, fig.width=10}
+
+bar + coord_polar() + ggtitle("Cover Type and Facing Direction")
+```
+```{r 28}
+#Direction and Cover Type Bar and Polar Coord Plot
+bar <- ggplot(data=smlSet) +
+  geom_bar(mapping = aes(x =direction, fill = Cover_Type))
+```
+
+```{r 29 Plot 21, fig.height=10}
+bar + coord_flip() + ggtitle("Cover Type and Facing Direction")
+```
+```{r 30 Plot 22, fig.height=10, fig.width=10}
+bar + coord_polar() + ggtitle("Cover Type and Facing Direction")
+```
+```{r 31}
+##Wilderness areas and Cover_Type bar and polar coord plot
+bar <- ggplot(data=smlSet) +
+  geom_bar(mapping = aes(x =region, fill = Cover_Type))
+```
+```{r 32 Plot 23, fig.width=10}
+bar + coord_flip() + ggtitle("Cover Type and Wilderness Area")
+```
+```{r 33 Plot 24, fig.height=10, fig.width=10}
+bar + coord_polar() + ggtitle("Cover Type and Wilderness Area")
+```
+```{r 34 Plot 25, fig.width=10}
+#Region and direction
+bar <- ggplot(data=smlSet) +
+  geom_bar(mapping = aes(x =direction, fill = region))
+bar + coord_flip() + ggtitle("Wilderness Area and Facing Direction")
+```
+```{r 35 Plot 26, fig.height=10, fig.width=10}
+bar + coord_polar() + ggtitle("Wilderness Area and Facing Direction") 
+```
+```{r 36 Plot 27, fig.width=10}
+#Region and zone
+ggplot(smlSet) +
+  geom_bar(mapping =aes(x =region, fill=zone), position = 'fill') + ggtitle("Wilderness Area and Growth Zone")
+```
+```{r 37 Plot 28, fig.height=10, fig.width=14}
+#Soil Type by Cover tpye
+# library(forcats)
+library(forcats)
+bar <- ggplot(smlSet, aes(fct_infreq(soil,ordered = TRUE), fill=Cover_Type)) + 
+  geom_bar()
+bar + coord_flip() + ggtitle("Cover Type and Soil Type")
+```
+```{r 38 Plot 29, fig.height=10, fig.width=13}
+bar + coord_polar() + ggtitle("Cover Type and Soil Type")
+```
+```{r 39 Plot 30, fig.height=10, fig.width=13}
+#Soil Type to Zone
+bar <- ggplot(smlSet, aes(fct_infreq(soil,ordered = TRUE), fill=zone)) + 
+  geom_bar()
+bar + coord_flip() + ggtitle("Growth Zone and Soil Type")
+```
+```{r 40 Plot 31, fig.height=10, fig.width=13}
+bar + coord_polar() + ggtitle("Growth Zone and Soil Type")
+```
+```{r 41 Plot 32, fig.height=10, fig.width=13}
+#Soil Type by Wilderness Area
+bar <- ggplot(smlSet, aes(fct_infreq(soil,ordered = TRUE), fill=region)) + 
+  geom_bar()
+bar + coord_flip() + ggtitle("Wilderness Area and Soil Type")
+```
+```{r 42 Plot 33, fig.height=10, fig.width=13}
+bar + coord_polar() + ggtitle("Wilderness Area and Soil Type")
+```
+```{r 43 Plot 34, fig.height=10, fig.width=10}
+#Soil Types by wilderness area (better to see differences)
+bar <- ggplot(smlSet) +
+  geom_bar(mapping =aes(x =soil, fill=zone), position = 'fill')
+bar + coord_flip()  + ggtitle("Growth Zone and Soil Type")
+```
+```{r 44 Plot 35, fig.height=10, fig.width=13}
+bar + coord_polar()  + ggtitle("Growth Zone and Soil Type")
+```
+```{r 45}
+#Consolidate numeric variables
+sampleSet <- select(smlSet,
+                  Cover_Type,
+                  Dist_water,
+                  Elevation,
+                  Aspect,
+                  Slope,
+                  Horizontal_Distance_To_Roadways,
+                  Hillshade_9am,
+                  Hillshade_Noon,
+                  Hillshade_3pm,
+                  Horizontal_Distance_To_Fire_Points,
+                  Wilderness_Area1,
+                  Wilderness_Area2,
+                  Wilderness_Area3,
+                  Wilderness_Area4,
+                  Soil_Type1,
+                  Soil_Type2,
+                  Soil_Type3,
+                  Soil_Type4,
+                  Soil_Type5,
+                  Soil_Type6,
+                  Soil_Type7,
+                  Soil_Type8,
+                  Soil_Type9,
+                  Soil_Type10,
+                  Soil_Type11,
+                  Soil_Type12,
+                  Soil_Type13,
+                  Soil_Type14,
+                  Soil_Type16,
+                  Soil_Type17,
+                  Soil_Type18,
+                  Soil_Type19,
+                  Soil_Type20,
+                  Soil_Type21,
+                  Soil_Type22,
+                  Soil_Type23,
+                  Soil_Type24,
+                  Soil_Type25,
+                  Soil_Type26,
+                  Soil_Type27,
+                  Soil_Type28,
+                  Soil_Type29,
+                  Soil_Type30,
+                  Soil_Type31,
+                  Soil_Type32,
+                  Soil_Type33,
+                  Soil_Type34,
+                  Soil_Type35,
+                  Soil_Type36,
+                  Soil_Type37,
+                  Soil_Type38,
+                  Soil_Type39,
+                  Soil_Type40
+)
+#Create Correlation matrix less the dependent variable
+library(corrplot)
+cor1 <- cor(sampleSet[-1]) #Correlation Lib
+dim(cor1)
+```
+```{r 46 Plot 36, fig.height=10, fig.width=13}
+#Create Correlation plot for the variables
+corrplot::corrplot(cor1, method = "square") #Dont load PLS before Corrplot
+```
+```{r 47 Plot 37, fig.height=10, fig.width=13}
+#Clusters Correlations
+corrplot::corrplot(cor1, order = "hclust")
+```
+```{r 48}
+#Zero and Near-Zero Variables
+nzv <- nearZeroVar(sampleSet, saveMetrics= TRUE) #caret Lib
+nzv[nzv$nzv,][1:10,]
+```
+
+```{r 48.a}
+dim(sampleSet)
+```
+
+```{r 49}
+#Shows how many variables are close to Zero Variance
+nzv <- nearZeroVar(sampleSet)
+filteredDescr <- sampleSet[, -nzv]
+dim(filteredDescr)
+```
+```{r 50 Plot 38, fig.height=9, fig.width=13}
+
+#Identify the Correlated Predictors
+descrCor <- cor(filteredDescr[-1])
+corrplot::corrplot(descrCor, method = "circle")
+```
+```{r 51}
+#Shows the correlation min-max values
+summary(descrCor[upper.tri(descrCor)])
+```
+```{r 52}
+############### PARTIAL LEAST SQUARES
+library(pls)
+#Make another data frame of all numeric for the pls regression
+sampleSet2pls <- as.data.frame(sapply( sampleSet, as.numeric))
+```
+
+```{r 53}
+#this uses the pls package uses resources ok for now
+set.seed(7)
+fit1 <- plsr(Cover_Type~., data=sampleSet2pls, Scale=TRUE, validation ="CV") #PLS Lib conflict with Corrplot
+summary(fit1)
+```
+```{r 54 Plot 39}
+validationplot(fit1, val.type = "R2") #plots Optimal number of components Based on R^2
+```
+```{r 55 Plot 40}
+pls.RMSEP <- RMSEP(fit1, estimate="CV")
+plot(pls.RMSEP, main="RMSEP PLS Cover_Type", xlab="Components")
+min_comp <- which.min(pls.RMSEP$val)
+points(min_comp, min(pls.RMSEP$val), pch=1, col="red", cex=2) #Show number of components in graph
+```
+```{r 56}
+#change all predictor variables to numeric 
+sampleSet <- sampleSet %>% 
+  mutate_if(is.integer, as.numeric)
+#### PLS - Partial Least Squares
+#split data
+inTrain <- createDataPartition(y=sampleSet$Cover_Type, p=0.70, list = FALSE)
+set.seed(78)
+train <- sampleSet[ inTrain,]
+test <- sampleSet[-inTrain,]
+nrow(train)  # 8139 70%
+nrow(test) #3485 30%
+```
+```{r 57}
+library(MLmetrics)
+library(pROC)
+library(doParallel)
+#Caret PLS Model Shows Cover_Type relationship to variables
+#Train Control for Model
+###RUN DoParallel on 6 cores for Caret train
+ctrl <- trainControl(method = "repeatedcv", 
+                     repeats = 3, #tried 10, long run time
+                     classProbs = TRUE,
+                     summaryFunction = multiClassSummary) 
+###Set Cores for Parallel Processing
+cl<- makePSOCKcluster(6)
+registerDoParallel(cl)
+ ```
+
+```{r 58}
+plsFit <- train(Cover_Type~., 
+                data = train, 
+                method = "pls", 
+                preProc = c("center", "scale"),
+                tuneLength =40, #per an earlier run of this model
+                trControl = ctrl, 
+                metric = "ROC") #MLMetrics Lib load after Caret and After using RMSE 
+```
+```{r 59}
+pltImp <- varImp(plsFit, scale = FALSE)
+pltImp
+```
+```{r 60 Plot 41, fig.height=9, fig.width=13}
+plot(varImp(plsFit), top =40)
+```
+```{r 61 Plot 42}
+plsFit
+ggplot(plsFit)  + ggtitle("Optimizing the Number of Variables")
+```
+```{r 62}
+plsClasses <- predict(plsFit, newdata = test)
+plsProbs <- predict(plsFit, newdata = test, type = "prob")
+head(plsProbs)
+```
+```{r 63}
+confusionMatrix(data = plsClasses, test$Cover_Type) #confusion matrix
+```
+```{r 64}
+library(randomForest)
+#Rank the Variable Importance
+ctrl2 <- trainControl(method="repeatedcv", number=10, repeats=3)
+```
+```{r 65}
+#Random Forest Model to select Features
+set.seed(90)
+mdl <- train(Cover_Type~., 
+             data = train, 
+             method = "rf", 
+             preProcess = c("center", "scale"), 
+             trControl = ctrl2)
+mdl
+```
+```{r 66}
+importance <- varImp(mdl, scale=FALSE)
+((importance))
+```
+```{r 67 Plot 43, fig.height=9, fig.width=12}
+ggplot(importance)  + ggtitle("Top Variable Importance")
+```
+```{r 68}
+#Feature Selection With FSelector Note very similar to Random Forest
+library(FSelector)
+set.seed(87)
+weights <- random.forest.importance(Cover_Type ~., train, importance.type = 1)
+((weights))
+```
+```{r 69 Plot 44}
+plot(weights$attr_importance)
+```
+```{r 70}
+subset <- cutoff.k(weights, 40) #top 40 variables
+f <- as.simple.formula(subset, "Cover_Type")
+((f))
+```
+```{r 71}
+#########Reduce data to Important Variables
+trainRd <- select(train,
+                  Cover_Type,
+                  Elevation, 
+                  Horizontal_Distance_To_Roadways, 
+                  Horizontal_Distance_To_Fire_Points, 
+                  Dist_water,
+                  Hillshade_Noon, 
+                  Hillshade_3pm,
+                  Hillshade_9am, 
+                  Aspect,
+                  Slope,  
+                  Wilderness_Area4,
+                  Wilderness_Area3,
+                  Wilderness_Area1,
+                  Wilderness_Area2,
+                  Soil_Type2, 
+                  Soil_Type3,
+                  Soil_Type4,
+                  Soil_Type6,
+                  Soil_Type10,
+                  Soil_Type11,
+                  Soil_Type12,
+                  Soil_Type13,
+                  Soil_Type16, 
+                  Soil_Type17,
+                  Soil_Type19,
+                  Soil_Type20,
+                  Soil_Type22,
+                  Soil_Type23,
+                  Soil_Type24,
+                  Soil_Type29,
+                  Soil_Type30,
+                  Soil_Type31,
+                  Soil_Type32,
+                  Soil_Type33,
+                  Soil_Type34,
+                  Soil_Type36,
+                  Soil_Type37, 
+                  Soil_Type38, 
+                  Soil_Type39, 
+                  Soil_Type40
+)
+str(trainRd)                  
+testRd <- select(test,
+                  Cover_Type,
+                  Elevation, 
+                  Horizontal_Distance_To_Roadways, 
+                  Horizontal_Distance_To_Fire_Points, 
+                  Dist_water,
+                  Hillshade_Noon, 
+                  Hillshade_3pm,
+                  Hillshade_9am, 
+                  Aspect,
+                  Slope,  
+                  Wilderness_Area4,
+                  Wilderness_Area3,
+                  Wilderness_Area1,
+                  Wilderness_Area2,
+                  Soil_Type2, 
+                  Soil_Type3,
+                  Soil_Type4,
+                  Soil_Type6,
+                  Soil_Type10,
+                  Soil_Type11,
+                  Soil_Type12,
+                  Soil_Type13,
+                  Soil_Type16, 
+                  Soil_Type17,
+                  Soil_Type19,
+                  Soil_Type20,
+                  Soil_Type22,
+                  Soil_Type23,
+                  Soil_Type24,
+                  Soil_Type29,
+                  Soil_Type30,
+                  Soil_Type31,
+                  Soil_Type32,
+                  Soil_Type33,
+                  Soil_Type34,
+                  Soil_Type36,
+                  Soil_Type37, 
+                  Soil_Type38, 
+                  Soil_Type39, 
+                  Soil_Type40
+)                    
+str(testRd)
+```
+
+```{r 72}
+preProcValues <- caret::preProcess(sampleSet, method = c("range")) #normalize, have tried center and scale
+sampleSetTran <- predict(preProcValues, sampleSet)
+str(sampleSetTran)
+```
+```{r 73}
+########## PROPORTIONS AND NORMALIZING
+round(prop.table((table(sampleSetTran$Cover_Type))), 3) *100 #class imbalance
+```
+
+```{r 74}
+summary(sampleSetTran)
+```
+```{r 75}
+smpl <- select(sampleSet,
+                 Cover_Type,
+                 Elevation, 
+                 Horizontal_Distance_To_Roadways, 
+                 Horizontal_Distance_To_Fire_Points, 
+                 Dist_water,
+                 Hillshade_Noon, 
+                 Hillshade_3pm,
+                 Hillshade_9am, 
+                 Aspect,
+                 Slope,  
+                 Wilderness_Area4,
+                 Wilderness_Area3,
+                 Wilderness_Area1,
+                 Wilderness_Area2,
+                 Soil_Type2, 
+                 Soil_Type3,
+                 Soil_Type4,
+                 Soil_Type6,
+                 Soil_Type10,
+                 Soil_Type11,
+                 Soil_Type12,
+                 Soil_Type13,
+                 Soil_Type16, 
+                 Soil_Type17,
+                 Soil_Type19,
+                 Soil_Type20,
+                 Soil_Type22,
+                 Soil_Type23,
+                 Soil_Type24,
+                 Soil_Type29,
+                 Soil_Type30,
+                 Soil_Type31,
+                 Soil_Type32,
+                 Soil_Type33,
+                 Soil_Type34,
+                 Soil_Type36,
+                 Soil_Type37, 
+                 Soil_Type38, 
+                 Soil_Type39, 
+                 Soil_Type40
+)
+```
+```{r 75a}
+#Create smaller data split so we can run these calcs locally
+inTrains <- createDataPartition(y=smpl$Cover_Type, p=0.70, list = FALSE)
+set.seed(78)
+training <- smpl[ inTrains,]
+testing <- smpl[-inTrains,]
+nrow(training)  # 8139 70%
+nrow(testing) #3485 30%
+```
+```{r 76}
+####Ensemble with Super Learner, tells which will be the best model to use with weighted averages
+library(SuperLearner) #caret, glmnet, randomForest, and xgboost have need pre-installed and needed for SuperLearner.
+outcome <- smpl$Cover_Type #Move Response Variable
+data <- subset(smpl, select = -Cover_Type) #Make a dataframe with predictors only
+str(data) #confirm Structure
+```
+```{r 77}
+dim(data) #Look at the size of data
+```
+```{r 78}
+set.seed(101)
+train_obs <- sample(nrow(data), 150)#reduce size to help with calculation speed. 
+X_train <- data[train_obs, ] #training sample
+X_hold <- data[-train_obs, ] #evaluate perfomance of the model
+outcome_bin <- as.numeric(outcome) #outcomes binary
+Y_train <- outcome_bin[train_obs]
+Y_hold <- outcome_bin[-train_obs]
+table(Y_train) #distribution
+```
+```{r 79}
+#
+listWrappers() #Shows the prediction algorithms available.
+sl_model <- c("SL.mean", #mean is lowest benchmark
+              "SL.glmnet", 
+              "SL.randomForest", 
+              "SL.ranger",
+              "SL.xgboost", 
+              "SL.nnet", 
+              "SL.ksvm",
+              "SL.svm",
+              "SL.nnls"
+)
+```
+```{r 80}
+system.time({ #processing time for Super Learner
+sl <- SuperLearner(Y=Y_train, X=X_train, family = gaussian(),
+                   SL.library = sl_model)
+})                    
+sl #Coef at zero means the model was not used at all
+#randomforest had warning that the response has 5 or less unique values, due to the low sample rate and low proportions on some Cover_Types
+
+```
+```{r 81}
+set.seed(10)
+system.time({
+r <- CV.SuperLearner(Y=Y_train, X=X_train, family = gaussian(), V=10,
+                     SL.library = sl_model)
+})
+```
+
+```{r 82}
+summary(r)
+```
+```{r 83}
+table(simplify2array(r$whichDiscreteSL))
+```
+```{r 84 Plot 45, fig.height=7, fig.width=10}
+plot(r) +
+theme_bw() + ggtitle("Model Preformance Estimate")#plots CV
+```
+```{r 85}
+pred <- predict(sl, X_hold, onlySL = T)
+head(pred$pred)
+```
+```{r 86}
+str(pred)
+```
+```{r 87}
+head(pred$library.predict)
+```
+```{r 88}
+#Each one is the SL learner 1 through 9
+summary(pred$library.predict)
+```
+```{r 89 Plot 46, fig.height=10, fig.width=13}
+#ggplot
+#Histogram plot
+qplot(pred$pred[, 1], binwidth=0.001) + 
+  theme_linedraw()  + ggtitle("Prediction Metric")
+```
+```{r 90}
+#Scatterplot
+qplot(Y_hold, pred$pred[, 1]) + theme_minimal() 
+```
+```{r 91}
+###Tune the Random Forest Model
+SL.randomForest.tune <- function(...,mtry=30,ntree=1000,nodesize=3){
+  SL.randomForest(...,mtry=mtry,ntree=ntree,nodesize=nodesize)
+}
+tuneGrid <-  expand.grid(mtry = c(3,5), ntree=c(500,1000), nodesize=c(1,3))
+for(i in seq(nrow(tuneGrid))) { 
+  eval(parse(text = paste0("SL.randomForest",tuneGrid[i,1],"_nt",tuneGrid[i,2],"_ns",tuneGrid[i,3], 
+                           "<- function(..., mtry = ", tuneGrid[i, 1], ", ntree = ", tuneGrid[i, 2], 
+                           ", nodesize = ", tuneGrid[i,3],") { SL.randomForest(..., mtry = mtry, 
+                           ntree = ntree, nodesize=nodesize)}")))
+}
+```
+
+```{r 92}
+SL.randomForest.tune
+allObjects <- ls()
+myRfObjects <- grep("SL.randomForest",allObjects)
+allRf <- allObjects[myRfObjects]
+allRf
+rf.sl <- SuperLearner(
+  Y = Y_train, 
+  X = X_train,
+  family = gaussian(),
+  method="method.NNLS",
+  SL.library = allRf
+)
+```
+```{r 93}
+rf.sl
+```
+```{r 94}
+############Random Forest in caret
+library(e1071)
+ctrl3 <- trainControl(method='repeatedcv', 
+                        number=10, 
+                        repeats=3)
+metric <- "Accuracy"
+set.seed(200)
+mtry <- sqrt(ncol(training))
+tunegrid <- expand.grid(.mtry=mtry)
+rf_ <- train(Cover_Type~., 
+                    data=training, 
+                    method='rf',
+                  # preProcess =c("center", "scale"),#add this after first run @0.777/0.6333
+                  # preProcess = ("range"),#after range 0.776/0.631
+                    metric='Accuracy', #after center and scale 0.777/0.631
+                    tuneGrid=tunegrid, #reran and got 0.779/0.636 didnt set seed mtry=6.32 for all cases
+                    trControl=ctrl3)
+((rf_))
+```
+```{r 95}
+#trying centering and scaling the data in preprocess
+rf_ <- train(Cover_Type~.,
+             data = train, 
+             method = "rf", 
+             preProcess = c("center", "scale"), 
+             trControl = ctrl3)
+((rf_))
+```
+```{r 96}
+#random variables
+mtry <- sqrt(ncol(training))
+ntree <- 3
+control <- trainControl(method='repeatedcv', 
+                        number=10, 
+                        repeats=3,
+                        search = 'random')
+set.seed(201)
+rf_random <- train(Cover_Type~.,
+                   data = training,
+                   method = 'rf',
+                   metric = 'Accuracy',
+                   tuneLength  = 15, 
+                   trControl = control)
+((rf_random))#21 mtry @0.804/0.680
+```
+
+```{r 97}
+plot(rf_random)
+```
+```{r 98}
+set.seed(345)
+control <- trainControl(method='repeatedcv', 
+                        number=10, 
+                        repeats=3, 
+                        search='grid')
+tunegrid <- expand.grid(.mtry = (1:15)) 
+rf_gridsearch <- train(Cover_Type ~ ., 
+                       data = training,
+                       method = 'rf',
+                       metric = 'Accuracy',
+                       tuneGrid = tunegrid)
+((rf_gridsearch))#mtry15 @0.787/0.652
+```
+```{r 99}
+plot(rf_gridsearch)
+```
+```{r 100}
+set.seed(16)
+bestMtry <- tuneRF(training[,-1],training[,1],
+                   mtryStart= 2,
+                   stepFactor = 1.5, 
+                   improve = 1e-5, 
+                   ntree = 500)
+((bestMtry))#best oob error is 19
+```
+```{r 101}
+set.seed(17)  
+control <- trainControl(method = 'repeatedcv',
+                        number = 10,
+                        repeats = 3,
+                        search = 'grid')
+tunegrid <- expand.grid(.mtry = c(sqrt(ncol(training))))
+modellist <- list()
+```
+
+```{r 102}
+#removed due to processing time for random forest model (ntree in c(1000,2000,3000,4000,5000)
+```
+```{r 106}
+############# Ranger Package
+library(ranger)
+set.seed(500)
+rf_fit <- train(Cover_Type~., data=training, method ="ranger")
+rf_fit
+```
+```{r 107}
+rf_predict <- predict(rf_fit, testing)#0.8089/0.6889 on first out of box run!!
+caret::confusionMatrix(rf_predict, testing$Cover_Type) #didnt set seed got 0.82/0.48
+```
+```{r 108}
+##Tune ranger
+rf_pca <- preProcess(select(training, -Cover_Type),
+                     method = c("center","scale","YeoJohnson", "nzv","pca"))
+rf_pca
+```
+
+```{r 109}
+rf_pca$method
+rf_pca$rotation
+```
+```{r 110}
+#########
+fit_control <- trainControl(method = "cv",
+                            number = 10)
+set.seed(56)
+rf_fit <- train(Cover_Type ~ ., 
+                data = training, 
+                method = "ranger",
+                trControl = fit_control)
+rf_fit
+```
+
+```{r 111}
+#####   downsample
+fit_control <- trainControl(method = "cv", 
+                            number = 10,
+                            sampling = "down") #down sample class imbalance
+set.seed(57)
+rf_fit_down <- train(Cover_Type ~ ., 
+                data = training, 
+                method = "ranger",
+                trControl = fit_control)
+rf_fit_down #dropped 0.52/0.33
+```
+```{r 112}
+###########   Upsample
+fit_control <- trainControl(method = "cv", 
+                            number = 10,
+                            sampling = "up")#mtry39   extratrees  0.8161981  0.7035628
+set.seed(57)
+rf_fit_up <- train(Cover_Type ~ ., 
+                     data = training, 
+                     method = "ranger",
+                     trControl = fit_control)
+rf_fit_up 
+```
+
+```{r 113}
+range_pred <- predict(rf_fit_up, testing)
+caret::confusionMatrix(range_pred, testing$Cover_Type) #0.807/0.689 repeated CV
+```
+```{r 114}
+### Final
+tuneGrid <- expand.grid(
+  .mtry = 39,
+  .splitrule = "extratrees",
+  .min.node.size = 1
+)
+set.seed(201)                     
+rf_final <- train(Cover_Type~., 
+                  data = training,
+                  method = "ranger",
+                  tuneGrid = tuneGrid,
+                  num.trees = 3000,
+                  trControl = fit_control
+                  )
+rf_final
+```
+
+```{r 115}
+rf_final$results
+```
+
+```{r 116}
+set.seed(202)
+final_pred <- predict(rf_final, testing)
+caret::confusionMatrix(final_pred, testing$Cover_Type)
+```
+```{r 117}
+stopCluster(cl)
+```
+
+
+
