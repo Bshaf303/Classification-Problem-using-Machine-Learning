@@ -31,8 +31,5 @@ It was later decided to make an even smaller sample of data approximately 11,000
 build and test the models. In theory a randomly sampled distribution of all variables is a valid method to build models on 
 limited computing resources. In hindsight, renting a temporary server to run the data would be an option. 
 
-The file that is attached is an HTML of the RNotebook and simply uploaded to this platform. There are ways to interface R
-and Git, however, the proecessing time for this project has been too long even with a smaller sample of the data. It took 
-6 hours to run the notebook from the start mostly due to the training models used in many steps. There is a correct format in
-RStudio that can output RMarkdown into a .md file for Git. It was decided to forego this in regard to teh processing time. 
+The file that is attached is an RNotebook that was saved for teh github environment and simply uploaded to this platform. There are ways to interface R and Git, however, the proecessing time for this project has been too long even with a smaller sample of the data. It took 6 hours to run the notebook from the start mostly due to the training models used in many steps. There is a correct format in RStudio that can output RMarkdown into a .md file for Git. It was decided to forego this in regard to the processing time, saved for another day. 
 
