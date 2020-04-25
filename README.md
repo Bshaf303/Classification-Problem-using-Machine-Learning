@@ -1,5 +1,4 @@
-# Practicum-1
-This is the first project in the completion of the master's of data science program practicum.
+Classification Problem using Machine Learning
 
 This is a forest cover classification problem. The original data is located at: 
 UCI Cover Type Dataset: https://archive.ics.uci.edu/ml/datasets/covertype
