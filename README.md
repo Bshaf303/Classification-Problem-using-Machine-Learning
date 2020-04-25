@@ -32,4 +32,4 @@ build and test the models. In theory a randomly sampled distribution of all vari
 limited computing resources. In hindsight, renting a temporary server to run the data would be an option. 
 
 The file that is attached is an RNotebook that was saved for teh github environment and simply uploaded to this platform. There are ways to interface R and Git, however, the proecessing time for this project has been too long even with a smaller sample of the data. It took 6 hours to run the notebook from the start mostly due to the training models used in many steps. There is a correct format in RStudio that can output RMarkdown into a .md file for Git. It was decided to forego this in regard to the processing time, saved for another day. 
- Presentation on Youtube: https://youtu.be/Jemu76u_MsA
+
